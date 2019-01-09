@@ -1,0 +1,181 @@
+--Original Code for the project
+/*Select everything from subscriptions table, 
+limit display to 100*/
+SELECT *
+FROM subscriptions
+LIMIT 100;
+
+--Get the range of months of data provided
+SELECT MIN(subscription_start), 
+MAX(subscription_start)
+FROM subscriptions;
+
+--How many different segments are there?
+SELECT DISTINCT(segment)
+FROM subscriptions;
+
+--Temporary table labeled months
+WITH months AS
+(SELECT
+'2017-01-01' AS first_day,
+ '2017-01-31' AS last_day
+ UNION
+ SELECT
+ '2017-02-01' AS first_day,
+ '2017-02-28' AS last_day
+ UNION
+ SELECT
+ '2017-03-01' AS first_day,
+ '2017-03-31' AS last_day
+),
+
+/*Temporary table combining subscriptions and temporary table months
+labeled cross_join*/
+ cross_join AS
+ (SELECT *
+ FROM subscriptions
+ CROSS JOIN months
+ ),
+ 
+ --Temporary table labeled status created from the cross_join table
+ status AS
+ (SELECT 
+  id,
+  first_day AS month,
+  /*Find users from segment 87 who existed prior to the beginning
+  of the month, return a 1, else return a 0*/
+  CASE
+  	WHEN (subscription_start < first_day) 
+  	AND (subscription_end > first_day OR subscription_end IS NULL) 
+  	AND (segment = 87) THEN 1
+  	ELSE 0
+  END AS is_active_87,
+  /*Find users from segment 30 who existed prior to the beginning
+  of the month, return a 1, else return a 0*/
+  CASE
+  	WHEN (subscription_start < first_day) 
+  	AND (subscription_end > first_day OR subscription_end IS NULL) 
+  	AND (segment = 30) THEN 1
+  	ELSE 0
+  END AS is_active_30,
+  /*Find users from segment 87 who canceled their subscription 
+  during the month, return a 1, else return a 0*/
+  CASE
+  	WHEN (subscription_end BETWEEN first_day AND last_day) 
+  	AND (segment = 87) THEN 1
+  	ELSE 0
+  END AS is_canceled_87,
+  /*Find users from segemtn 30 who canceled their subscription
+  during the month, return a 1, else return a 0*/
+  CASE
+  	WHEN (subscription_end BETWEEN first_day AND last_day) 
+  	AND (segment = 30) THEN 1
+  	ELSE 0
+  END AS is_canceled_30
+  FROM cross_join
+ ),
+ 
+ /* Temporary table labeled status_aggregate, gets the SUM of the
+ active and canceled subscriptions for each segment, for each 
+ month from the temporary status table*/
+ status_aggregate AS
+ (SELECT month, 
+  SUM(is_active_87) AS sum_active_87,
+  SUM(is_active_30) AS sum_active_30,
+  SUM(is_canceled_87) AS sum_canceled_87,
+  SUM(is_canceled_30) AS sum_canceled_30
+  FROM status
+  GROUP BY month
+ ) 
+ /*Calculate churn rate using SUM values from temporary 
+ status_aggregate table*/
+ SELECT
+ month, 
+ 1.0 * sum_canceled_87/sum_active_87 AS churn_rate_87,
+ 1.0 * sum_canceled_30/sum_active_30 AS churn_rate_30
+ FROM status_aggregate
+ GROUP BY month;
+
+--Change to code to allow large segments
+/*Select everything from subscriptions table, 
+limit display to 100*/
+SELECT *
+FROM subscriptions
+LIMIT 100;
+
+--Get the range of months of data provided
+SELECT MIN(subscription_start), 
+MAX(subscription_start)
+FROM subscriptions;
+
+--How many different segments are there?
+SELECT DISTINCT(segment)
+FROM subscriptions;
+
+--Temporary table labeled months
+WITH months AS
+(SELECT
+'2017-01-01' AS first_day,
+ '2017-01-31' AS last_day
+ UNION
+ SELECT
+ '2017-02-01' AS first_day,
+ '2017-02-28' AS last_day
+ UNION
+ SELECT
+ '2017-03-01' AS first_day,
+ '2017-03-31' AS last_day
+),
+
+/*Temporary table combining subscriptions and temporary table 
+months labeled cross_join*/
+ cross_join AS
+ (SELECT *
+ FROM subscriptions
+ CROSS JOIN months
+ ),
+ 
+ --Temporary table labeled status created from the cross_join table
+ status AS
+ (SELECT 
+  id,
+  first_day AS month,
+  segment,
+  /*Find users who existed prior to the beginning
+  of the month, return a 1, else return a 0*/
+  CASE
+  	WHEN (subscription_start < first_day) 
+  	AND (subscription_end > first_day OR subscription_end IS NULL) 
+  	THEN 1
+  	ELSE 0
+  END AS is_active,
+   /*Find users who canceled their subscription 
+  during the month, return a 1, else return a 
+  0*/
+  CASE
+  	WHEN (subscription_end BETWEEN first_day AND last_day) 
+  	THEN 1
+  	ELSE 0
+  END AS is_canceled
+  FROM cross_join
+ ),
+ 
+ /* Temporary table labeled status_aggregate, gets the SUM of the
+ active and canceled subscriptions for each segment, for each 
+ month from the temporary status table*/
+ status_aggregate AS
+ (SELECT month,
+  segment,
+  SUM(is_active) AS sum_active,
+  SUM(is_canceled) AS sum_canceled
+  FROM status
+  GROUP BY month, segment
+ ) 
+ /*Calculate churn rate using SUM values from temporary 
+ status_aggregate table*/
+ SELECT
+ month, 
+ segment,
+ 1.0 * sum_canceled/sum_active AS churn_rate
+ FROM status_aggregate
+ GROUP BY month, segment;
